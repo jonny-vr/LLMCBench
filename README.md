@@ -1,6 +1,6 @@
 # LLMCBench: Benchmarking Large Language Model Compression for Efficient Deployment
 
-![image-20241026195404186](.\figs\image-20241026195404186.png)
+![image-20241026195404186](./figs/f1.png)
 
 ## Installation
 
