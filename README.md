@@ -1,6 +1,6 @@
 # LLMCBench: Benchmarking Large Language Model Compression for Efficient Deployment
 
-![image-20241026195404186](C:\Users\一觞浮云醉月光i\AppData\Roaming\Typora\typora-user-images\image-20241026195404186.png)
+![image-20241026195404186](.\figs\image-20241026195404186.png)
 
 ## Installation
 
