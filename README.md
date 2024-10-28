@@ -13,7 +13,7 @@ conda activate llmcbench
 pip install -r requirements.txt
 ```
 
-## Example
+## Usage
 
 This repo contains codes for testing MMLU, MNLI, QNLI, Wikitext2, advGLUE, TruthfulQA datasets and FLOPs.
 
@@ -58,8 +58,6 @@ bash scripts/run_tqa.sh
 ```
 bash scripts/run_flops.sh
 ```
-
-
 
 ## Acknowledgements
 
