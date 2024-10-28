@@ -11,7 +11,7 @@ cd LLMCBench
 conda create -n llmcbench python=3.9
 conda activate llmcbench
 
-pip install transformers
+pip install -r requirements.txt
 ```
 
 ​    
