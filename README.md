@@ -10,11 +10,8 @@ cd LLMCBench
 
 conda create -n llmcbench python=3.9
 conda activate llmcbench
-
 pip install -r requirements.txt
 ```
-
-​    
 
 ## Example
 
@@ -30,6 +27,36 @@ bash scripts/run_mmlu.sh
 
 ```
 bash scripts/run_mnli.sh
+```
+
+#### Testing QNLI
+
+```
+bash scripts/run_qnli.sh
+```
+
+#### Testing Wikitext2
+
+```
+bash scripts/run_wikitext2.sh
+```
+
+#### Testing advGLUE
+
+```
+bash scripts/run_advglue.sh
+```
+
+#### Testing TruthfulQA
+
+```
+bash scripts/run_tqa.sh
+```
+
+#### Testing FLOPs (floating point operations)
+
+```
+bash scripts/run_flops.sh
 ```
 
 
