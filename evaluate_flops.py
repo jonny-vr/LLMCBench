@@ -10,7 +10,7 @@ def main(args):
     model = AutoModelForCausalLM.from_pretrained(args.path,device_map="auto",trust_remote_code=True)
 
     batch_size = 1
-    max_seq_length = 128
+    max_seq_length = args.seqlen
     flops, macs, params = calculate_flops(model=model,
                                         input_shape=(batch_size, max_seq_length),
                                         transformer_tokenizer=tokenizer,
@@ -20,5 +20,6 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--path", type=str, required=True, help='model checkpoint location')
+    parser.add_argument("--seqlen", type=int, default=128)
     args = parser.parse_args()
     main(args)

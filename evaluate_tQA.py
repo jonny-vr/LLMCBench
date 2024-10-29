@@ -273,7 +273,6 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--metrics', nargs='+', default=['mc'])
     parser.add_argument('--path', type=str)
     parser.add_argument('--preset', type=str, default='qa')
     parser.add_argument('--input_path', type=str, default='data/TruthfulQA/TruthfulQA.csv')

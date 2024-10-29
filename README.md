@@ -2,6 +2,8 @@
 
 ![image-20241026195404186](./figs/f1.png)
 
+ The **L**arge **L**anguage **M**odel **C**ompression **B**enchmark (LLMCBench) is a rigorously designed benchmark with an in-depth analysis for LLM compression algorithms. 
+
 ## Installation
 
 ```
@@ -23,11 +25,25 @@ This repo contains codes for testing MMLU, MNLI, QNLI, Wikitext2, advGLUE, Truth
 bash scripts/run_mmlu.sh
 ```
 
+##### Overview of Arguments:
+
+- `--path` : Model checkpoint location.
+- `--data_dir` : Dataset location.
+- `--ntrain` : number of shots.
+- `--seqlen` : Denotes the maximum input sequence length for LLM.
+
 #### Testing MNLI
 
 ```
 bash scripts/run_mnli.sh
 ```
+
+##### Overview of Arguments:
+
+- `--path` : Model checkpoint location.
+- `--data_dir` : Dataset location.
+- `--ntrain` : number of shots.
+- `--seqlen` : Denotes the maximum input sequence length for LLM.
 
 #### Testing QNLI
 
@@ -35,11 +51,24 @@ bash scripts/run_mnli.sh
 bash scripts/run_qnli.sh
 ```
 
+##### Overview of Arguments:
+
+- `--path` : Model checkpoint location.
+- `--data_dir` : Dataset location.
+- `--ntrain` : number of shots.
+- `--seqlen` : Denotes the maximum input sequence length for LLM.
+
 #### Testing Wikitext2
 
 ```
 bash scripts/run_wikitext2.sh
 ```
+
+##### Overview of Arguments:
+
+- `--path` : Model checkpoint location.
+- `--device` : Denotes which device to place the model onto.
+- `--seqlen` : Denotes the maximum input sequence length for the model.
 
 #### Testing advGLUE
 
@@ -47,17 +76,36 @@ bash scripts/run_wikitext2.sh
 bash scripts/run_advglue.sh
 ```
 
+##### Overview of Arguments:
+
+- `--path` : Model checkpoint location.
+- `--data_file` : Dataset file location.
+- `--ntrain` : number of shots.
+- `--test_origin` : Denotes whether to test on the original GLUE data.
+
 #### Testing TruthfulQA
 
 ```
 bash scripts/run_tqa.sh
 ```
 
+##### Overview of Arguments:
+
+- `--path` : Model checkpoint location.
+- `--presets` : Preset to use for prompt generation. Please see tqa_presets.py for options.
+- `--input_path` : Dataset file location.
+- `--device` : Denotes which device to place the model onto.
+
 #### Testing FLOPs (floating point operations)
 
 ```
 bash scripts/run_flops.sh
 ```
+
+##### Overview of Arguments:
+
+- `--path` : Model checkpoint location.
+- `--seqlen` : Denotes the input sequence length for the model.
 
 ## Acknowledgements
 
