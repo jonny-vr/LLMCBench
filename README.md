@@ -2,7 +2,7 @@
 
 ![image-20241026195404186](./figs/f1.png)
 
- The **L**arge **L**anguage **M**odel **C**ompression **B**enchmark (LLMCBench) is a rigorously designed benchmark with an in-depth analysis for LLM compression algorithms. 
+ The **L**arge **L**anguage **M**odel **C**ompression **Bench**mark (LLMCBench) is a rigorously designed benchmark with an in-depth analysis for LLM compression algorithms. 
 
 ## Installation
 
