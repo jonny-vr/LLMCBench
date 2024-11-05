@@ -112,3 +112,12 @@ bash scripts/run_flops.sh
 In addition to the code in this repo, we also use [EleutherAI/lm-evaluation-harness: A framework for few-shot evaluation of language models. (github.com)](https://github.com/EleutherAI/lm-evaluation-harness) for evaluation.
 
 ## Citation
+
+```
+@inproceedings{yang2024llmcbench,
+  title={LLMCBench: Benchmarking Large Language Model Compression for Efficient Deployment},
+  author={Yang, Ge and He, Changyi and Guo, Jinyang and Wu, Jianyu and Ding, Yifu and Liu, Aishan and Qin, Haotong and Ji, Pengliang and Liu, Xianglong},
+  booktitle={Thirty-eighth Conference on Neural Information Processing Systems Datasets and Benchmarks Track},
+  year={2024}
+}
+```
