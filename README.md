@@ -113,6 +113,8 @@ In addition to the code in this repo, we also use [EleutherAI/lm-evaluation-harn
 
 ## Citation
 
+If you find our project useful or relevant to your research, please kindly cite our paper:
+
 ```
 @inproceedings{yang2024llmcbench,
   title={LLMCBench: Benchmarking Large Language Model Compression for Efficient Deployment},
