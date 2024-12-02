@@ -4,6 +4,12 @@
 
  The **L**arge **L**anguage **M**odel **C**ompression **Bench**mark (LLMCBench) is a rigorously designed benchmark with an in-depth analysis for LLM compression algorithms. 
 
+## Introduction
+
+[LLMCBench: Benchmarking Large Language Model Compression for Efficient Deployment [arXiv]](https://arxiv.org/abs/2410.21352)
+
+NeurIPS 2024 Datasets and Benchmarks Track Spotlight
+
 ## Installation
 
 ```
