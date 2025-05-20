@@ -1,3 +1,6 @@
 [submodule "third_party/wanda"]
 	path = third_party/wanda
 	url = https://github.com/locuslab/wanda.git
+[submodule "third_party/llm-awq"]
+	path = third_party/llm-awq
+	url = https://github.com/mit-han-lab/llm-awq.git
