@@ -89,9 +89,16 @@ def eval(args, subject, model, tokenizer, dev_df, test_df):
 
 
 def main(args):
+    start_all = time.perf_counter()               # ← start timer
+    
     # load your model and tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.path, use_fast=False,add_bos_token=False,trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(args.path, device_map="auto",trust_remote_code=True)
+    model = AutoModelForCausalLM.from_pretrained(
+        args.path, device_map="auto", torch_dtype=torch.float16, trust_remote_code=True)
+    
+    # report weight precision
+    first_param = next(model.parameters())
+    print(f"Loaded model weights in dtype: {first_param.dtype}", flush=True)
 
     subjects = sorted(
         [
@@ -128,6 +135,9 @@ def main(args):
         print("Average accuracy {:.4f} - {}".format(cat_acc, cat))
     weighted_acc = np.mean(np.concatenate(all_cors))
     print("Average accuracy: {:.4f}".format(weighted_acc))
+    
+    elapsed = time.perf_counter() - start_all    # ← stop timer
+    print(f"Total evaluation time: {elapsed:.1f} seconds", flush=True)
     
 
 if __name__ == "__main__":
