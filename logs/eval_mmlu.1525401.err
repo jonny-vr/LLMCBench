@@ -1,6 +1,0 @@
-Traceback (most recent call last):
-  File "/mnt/lustre/work/geiger/gwb345/LLMCBench/evaluate_mmlu.py", line 5, in <module>
-    import pandas as pd
-ModuleNotFoundError: No module named 'pandas'
-srun: error: galvani-cn222: task 0: Exited with exit code 1
-srun: Terminating StepId=1525401.0
