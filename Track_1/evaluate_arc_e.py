@@ -5,7 +5,7 @@ import torch
 import time
 import pandas as pd
 import numpy as np
-from evaluate_mmlu_batched import eval_subject_batched, choices
+from Track_1.evaluate_mmlu_batched import eval_subject_batched, choices
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 
