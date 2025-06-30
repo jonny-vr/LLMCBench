@@ -1,0 +1,1 @@
+{"columns": ["Tasks", "Version", "Filter", "num_fewshot", "Metric", "Value", "Stderr"], "data": [["wikitext", 2.0, "none", 0, "word_perplexity", "7.329319344682276", "N/A"], ["wikitext", 2.0, "none", 0, "byte_perplexity", "1.451346887120839", "N/A"], ["wikitext", 2.0, "none", 0, "bits_per_byte", "0.5373923798578213", "N/A"]]}

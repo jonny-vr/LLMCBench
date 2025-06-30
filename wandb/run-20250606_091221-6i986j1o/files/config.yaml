@@ -1,0 +1,131 @@
+_wandb:
+    value:
+        cli_version: 0.20.1
+        m: []
+        python_version: 3.10.16
+        t:
+            "1":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 51
+                - 53
+                - 71
+                - 98
+                - 100
+            "2":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 51
+                - 53
+                - 71
+                - 98
+                - 100
+            "3":
+                - 2
+                - 55
+                - 62
+            "4": 3.10.16
+            "5": 0.20.1
+            "6": 4.52.3
+            "12": 0.20.1
+            "13": linux-x86_64
+cli_configs:
+    value:
+        batch_size: auto
+        batch_sizes: []
+        bootstrap_iters: 100000
+        device: null
+        fewshot_seed: 1234
+        gen_kwargs: null
+        limit: null
+        model: hf
+        model_args: pretrained=/mnt/lustre/work/geiger/gwb345/models/llama-3.1-8b-hf,device_map=auto
+        model_dtype: torch.bfloat16
+        model_num_parameters: 8030261248
+        model_revision: main
+        model_sha: ""
+        numpy_seed: 1234
+        random_seed: 0
+        torch_seed: 1234
+        use_cache: null
+task_configs:
+    value:
+        wikitext:
+            dataset_kwargs:
+                trust_remote_code: true
+            dataset_name: wikitext-2-raw-v1
+            dataset_path: EleutherAI/wikitext_document_level
+            description: ""
+            doc_to_decontamination_query: '{{page}}'
+            doc_to_target: |
+                def wikitext_detokenizer(doc):
+                    string = doc["page"]
+                    # contractions
+                    string = string.replace("s '", "s'")
+                    string = re.sub(r"/' [0-9]/", r"/'[0-9]/", string)
+                    # number separators
+                    string = string.replace(" @-@ ", "-")
+                    string = string.replace(" @,@ ", ",")
+                    string = string.replace(" @.@ ", ".")
+                    # punctuation
+                    string = string.replace(" : ", ": ")
+                    string = string.replace(" ; ", "; ")
+                    string = string.replace(" . ", ". ")
+                    string = string.replace(" ! ", "! ")
+                    string = string.replace(" ? ", "? ")
+                    string = string.replace(" , ", ", ")
+                    # double brackets
+                    string = re.sub(r"\(\s*([^\)]*?)\s*\)", r"(\1)", string)
+                    string = re.sub(r"\[\s*([^\]]*?)\s*\]", r"[\1]", string)
+                    string = re.sub(r"{\s*([^}]*?)\s*}", r"{\1}", string)
+                    string = re.sub(r"\"\s*([^\"]*?)\s*\"", r'"\1"', string)
+                    string = re.sub(r"'\s*([^']*?)\s*'", r"'\1'", string)
+                    # miscellaneous
+                    string = string.replace("= = = =", "====")
+                    string = string.replace("= = =", "===")
+                    string = string.replace("= =", "==")
+                    string = string.replace(" " + chr(176) + " ", chr(176))
+                    string = string.replace(" \n", "\n")
+                    string = string.replace("\n ", "\n")
+                    string = string.replace(" N ", " 1 ")
+                    string = string.replace(" 's", "'s")
+
+                    return string
+            doc_to_text: ""
+            fewshot_delimiter: |4+
+
+            metadata:
+                device_map: auto
+                pretrained: /mnt/lustre/work/geiger/gwb345/models/llama-3.1-8b-hf
+                version: 2
+            metric_list:
+                - metric: word_perplexity
+                - metric: byte_perplexity
+                - metric: bits_per_byte
+            num_fewshot: 0
+            output_type: loglikelihood_rolling
+            process_results: |
+                def process_results(doc, results):
+                    (loglikelihood,) = results
+                    # IMPORTANT: wikitext counts number of words in *original doc before detokenization*
+                    _words = len(re.split(r"\s+", doc["page"]))
+                    _bytes = len(doc["page"].encode("utf-8"))
+                    return {
+                        "word_perplexity": (loglikelihood, _words),
+                        "byte_perplexity": (loglikelihood, _bytes),
+                        "bits_per_byte": (loglikelihood, _bytes),
+                    }
+            repeats: 1
+            should_decontaminate: true
+            target_delimiter: ' '
+            task: wikitext
+            test_split: test
+            training_split: train
+            unsafe_code: false
+            validation_split: validation

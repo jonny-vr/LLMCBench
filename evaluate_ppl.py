@@ -11,7 +11,7 @@ def eval_ppl(model, testenc, seq_len, bs=1, device=None):
     nlls = []
     for i in tqdm(range(0,nsamples,bs),desc="Evaluating PPL"):
         j = min(i+bs, nsamples)
-        inputs = testenc[:,(i * seq_len):(j * seq_len)].to(device)
+        inputs = testenc[:,(i * seq_len):(j * seq_len)]
         inputs = inputs.reshape(j-i, seq_len)
 
         lm_logits = model(inputs).logits
@@ -47,19 +47,39 @@ def get_loaders(tokenizer, seed, seq_len=2048, nsamples=128):
     
     return trainloader, testenc
 
-def eval(args, model, tokenizer, seq_len=2048, device="cuda"):
-    _, test_loader = get_loaders(tokenizer, seed=0, seq_len=seq_len)
-    with torch.no_grad():
-        ppl = eval_ppl(model, test_loader, seq_len=seq_len, bs=1, device=device)
-    print("Wikitext2 ppl:{:.2f}".format(ppl))
+
 
 
 
 def main(args):
-    # load your model and tokenizer
-    tokenizer = AutoTokenizer.from_pretrained(args.path,use_fast=False,add_bos_token=False,trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(args.path,device_map="auto",trust_remote_code=True)
-    eval(args, model, tokenizer, args.seqlen, device=args.device)
+    # 1) Load tokenizer & model
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.path,
+        use_fast=False,
+        add_bos_token=False,
+        trust_remote_code=True
+    )
+    model = AutoModelForCausalLM.from_pretrained(
+        args.path,
+        device_map="auto",
+        trust_remote_code=True
+    )
+
+    # 2) Prepare test data
+    _, testenc = get_loaders(tokenizer, seed=42, seq_len=args.seqlen)
+
+    # 3) Evaluate perplexity
+    ppl = eval_ppl(
+        model=model,
+        testenc=testenc,
+        seq_len=args.seqlen,
+        bs=1,
+        device=args.device
+    )
+
+    # 4) Report
+    print(f"Perplexity = {ppl:.2f}")
+
 
 
 if __name__ == "__main__":
