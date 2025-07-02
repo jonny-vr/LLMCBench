@@ -5,9 +5,9 @@ from transformers import BitsAndBytesConfig
 
 MODEL_CONFIGS = {
     # --- LLaMA-4 Scout (107/16B) ----------------------------------
-    r"^LLaMA-4-107/16B$": {
+    r"^LLaMA-4-.*$": {
         "torch_dtype": torch.bfloat16,
-        "quantize": True,
+        "quantize": False,
         "max_len": 8192,
     },
 
@@ -30,47 +30,35 @@ MODEL_CONFIGS = {
     r"^Gemma-3-1B$": {
         "torch_dtype": torch.bfloat16,
         "quantize": False,
-        "max_len": 32768,   # 32 K tokens context
+        "max_len": 8192,   # 32 K tokens context
     },
     # 4 B, 12 B, 27 B sizes: 128K tokens total (text+images)
     r"^Gemma-3-(4B|12B)$": {
         "torch_dtype": torch.bfloat16,
         "quantize": False,
         "max_len": 8192,  # 128 K tokens context
-        "bnb_config": BitsAndBytesConfig(
-            load_in_4bit=False,
-            llm_int4_enable_fp32_cpu_offload=False,
-            offload_state_dict=True,
-            offload_folder=os.environ["JOB_OFFLOAD_DIR"]
-        ),
     },
     r"^Gemma-3-27B$": {
         "torch_dtype": torch.bfloat16,
         "quantize": False,  # 8-bit quantization because of size
         "max_len": 8192,   # 128 K tokens context 131072           
-        "bnb_config": BitsAndBytesConfig(
-            load_in_4bit=False,
-            llm_int4_enable_fp32_cpu_offload=False,
-            offload_state_dict=True,
-            offload_folder=os.environ["JOB_OFFLOAD_DIR"]
-    ),
     },
 
     # --- Qwen-3 Base models --------------------------------------
     r"^Qwen-3-.*-Base$": {
         "torch_dtype": torch.bfloat16,
         "quantize": False,
-        "max_len": 32768,
+        "max_len": 8192,
     },
     r"^Qwen-3-32B$": {
         "torch_dtype": torch.bfloat16,
         "quantize": False,
-        "max_len": 40960,
+        "max_len": 8192,
     },
     r"^Qwen-QwQ-32B$": {
         "torch_dtype": torch.bfloat16,
         "quantize": False,
-        "max_len": 131072,
+        "max_len": 8192,
     },
 
     # --- DeepSeek family -----------------------------------------
@@ -84,30 +72,24 @@ MODEL_CONFIGS = {
     r"^DS-R1-Distill-Llama-8B$": {
         "torch_dtype": torch.float16,
         "quantize": False,
-        "max_len": 32768,
+        "max_len": 8192,
     },
     r"^DS-R1-Distill-Llama-70B$": {
         "torch_dtype": torch.float16,
         "quantize": False,
-        "max_len": 32768,
+        "max_len": 8192,
     },
     # Qwen3-30B-A3B
     r"^Qwen3-30B-A3B$": {
         "torch_dtype": torch.bfloat16,
         "quantize": False,
-        "max_len": 40960,
+        "max_len": 8192,
         "bnb_config": None,
     },
     r"^Qwen-QwQ-32B$": {
         "torch_dtype": torch.bfloat16,
         "quantize": False,
         "max_len": 4096,
-        "bnb_config": BitsAndBytesConfig(
-            load_in_4bit=False,
-            llm_int4_enable_fp32_cpu_offload=False,
-            offload_state_dict=True,
-            offload_folder=os.environ["JOB_OFFLOAD_DIR"]
-        ),
     },
 
 }
@@ -115,7 +97,7 @@ MODEL_CONFIGS = {
 FALLBACK = {
     "torch_dtype": torch.float16,
     "quantize": False,
-    "max_len": 2048,
+    "max_len": 8192,
     "bnb_config": None,
 }
 
@@ -134,8 +116,9 @@ def get_model_cfg(model_path: str):
                 cfg["bnb_config"] = BitsAndBytesConfig(
                     load_in_4bit=False,
                     llm_int4_enable_fp32_cpu_offload=False,
-                    offload_state_dict=True,
+                    offload_state_dict=False,
                     offload_folder=os.environ["JOB_OFFLOAD_DIR"]
                 )
             return cfg
     return FALLBACK.copy()
+

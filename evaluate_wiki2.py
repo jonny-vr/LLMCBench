@@ -1,76 +1,55 @@
 #!/usr/bin/env python3
 """
-Compute sliding-window perplexity on WikiText-2-raw-v1 (test set).
+Compute fixed-block perplexity on WikiText-2-raw-v1 (test set) in one-pass-per-block mode.
 
-Key upgrades
-------------
-* Genau **ein BOS**-Token am Textanfang (modellunabhängig)
-* Automatisches Hinzufügen eines Pad-Tokens + Embedding-Resize, falls nötig
-* Verwendet modell-spezifische Kontextlänge (model_configs.py) → übersteuerbar via --max_len
-* TF32-Matmul bei Ampere+ GPUs, wenn das Modell in BF16 läuft (≈ 10–15 % schneller)
-* Robuster OOM-Fallback + exponentielle Batch-Größen-Suche
-* Dynamisches Padding nur auf die längste Sequenz im Batch (≠ max_len)
-
-Erwartete PPL-Richtwerte (WikiText-2 test):
-    LLaMA-3-8B FP16  … ≈ 5.5
-    LLaMA-2-70B 8-bit… ≈ 6-7
-    Gemma-3-27B 8-bit… ≈ 5.8
+Key features:
+* Single BOS token at text front (model‑agnostic)
+* Automatic pad‑token addition and embedding resize if needed
+* Uses model‑specific context length from model_configs.py (overrideable via --max_len)
+* Optional batch‑size autotuning (finds largest batch that fits in VRAM)
+* Simple next‑token loss over fixed‑length chunks (no sliding windows)
 """
 
 from __future__ import annotations
-import argparse
-import json
-import math
-import os
-import re
-import time
-from typing import List, Tuple
+import argparse, json, math, os, re, time
+from typing import Optional, List
 
 import torch
 from datasets import load_dataset
-from torch.nn.utils.rnn import pad_sequence
-from transformers import AutoModelForCausalLM, AutoTokenizer, Gemma3ForConditionalGeneration, AutoConfig
+from transformers import (
+    AutoTokenizer,
+    AutoModelForCausalLM,
+    Gemma3ForConditionalGeneration,
+    Llama4ForConditionalGeneration,
+)
 
 from model_configs import get_model_cfg
 
-
 # --------------------------------------------------------------------------- #
-# helper functions
+# helper: probe whether a given batch size fits                                #
 # --------------------------------------------------------------------------- #
 
 def try_batch(
     model: torch.nn.Module,
-    enc: torch.Tensor,
-    windows: List[Tuple[int, int]],
+    ids: torch.Tensor,  # [nsamples, seq_len]
     batch_size: int,
+    first_device: torch.device,
     pad_id: int,
-    max_len: int,
 ) -> bool:
-    """Probe-Batch, um die maximale Batch-Größe ohne OOM abzuschätzen."""
-    first_device = next(iter(model.hf_device_map.values()))
-    sorted_win = sorted(windows, key=lambda w: w[1] - w[0], reverse=True)
-    probe = sorted_win[:batch_size]
-
-    input_seqs, target_seqs = [], []
-    for begin, end in probe:
-        seq = enc[begin:end]
-        if seq.size(0) < max_len:
-            pad_len = max_len - seq.size(0)
-            pad_chunk = torch.full((pad_len,), pad_id, dtype=torch.long)
-            seq = torch.cat([pad_chunk, seq])
-
-        inp = seq.clone()
-        tgt = seq.clone()
-        tgt[:-(end - begin)] = -100
-        input_seqs.append(inp)
-        target_seqs.append(tgt)
-
-    inp_batch = pad_sequence(input_seqs, batch_first=True, padding_value=pad_id).to(first_device)
-    tgt_batch = pad_sequence(target_seqs, batch_first=True, padding_value=-100).to(first_device)
-
+    """Run a single forward with <batch_size> blocks to see if it OOMs."""
+    bs = min(batch_size, ids.size(0))
+    probe = ids[:bs].to(first_device)
+    tgt   = probe.clone()
+    tgt[:, :-1] = -100
+    attn_mask = torch.ones_like(probe).to(first_device)
     try:
         with torch.no_grad():
-            _ = model(inp_batch, labels=tgt_batch, use_cache=False)
+            _ = model(
+                probe,
+                attention_mask=attn_mask,
+                labels=tgt,
+                use_cache=False,
+            )
         return True
     except RuntimeError as e:
         if "out of memory" in str(e).lower():
@@ -78,56 +57,53 @@ def try_batch(
             return False
         raise
 
-
 # --------------------------------------------------------------------------- #
-# main
+# main                                                                         #
 # --------------------------------------------------------------------------- #
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--path", required=True, help="HF repo oder lokaler Checkpoint")
-    ap.add_argument("--max_len", type=int, help="Kontextlänge (default: modellabhängig)")
-    ap.add_argument("--stride", type=int, default=256, help="Sliding-Window-Schritt")
-    ap.add_argument("--batch_size", default="auto", help='Batch-Größe oder "auto" für autotune')
-    ap.add_argument("--single_gpu", action="store_true", help="Alles auf eine GPU statt device_map=auto")
+    ap.add_argument("--path", required=True, help="HF repo or local checkpoint")
+    ap.add_argument("--batch_size", default="auto", help="Batch size or 'auto' to autotune")
+    ap.add_argument("--single_gpu", action="store_true", help="Force single‑GPU loading")
     args = ap.parse_args()
 
     model_id = os.path.basename(args.path.rstrip("/"))
     cfg = get_model_cfg(model_id)
 
     start_time = time.time()
-    # ---------- tokenizer ----------
-    is_gemma = bool(re.match(r"^Gemma-3-", model_id, flags=re.IGNORECASE))
+    # ---------- Tokenizer ----------
     tokenizer = AutoTokenizer.from_pretrained(
-        args.path,
-        use_fast=True,
-        trust_remote_code=True,
-        add_bos_token=False
+        args.path, use_fast=True, trust_remote_code=True, add_bos_token=False
     )
-    added = 0
     if tokenizer.pad_token_id is None:
-        added = tokenizer.add_special_tokens({"pad_token": tokenizer.eos_token})
+        tokenizer.add_special_tokens({"pad_token": tokenizer.eos_token})
+    pad_id = tokenizer.pad_token_id
 
-    # ---------- model ----------
-    quant_cfg = cfg.get("bnb_config")
+    # ---------- Model ----------
+    quant_cfg  = cfg.get("bnb_config")
     torch_dtype = None if cfg.get("quantize") else cfg["torch_dtype"]
 
-    model_cls = Gemma3ForConditionalGeneration if is_gemma else AutoModelForCausalLM
+    is_llama4 = bool(re.match(r"^Llama-4-Scout", model_id))
+    is_gemma  = bool(re.match(r"^Gemma-3-", model_id, flags=re.IGNORECASE))
+    if is_llama4:
+        model_cls = Llama4ForConditionalGeneration
+    elif is_gemma:
+        model_cls = Gemma3ForConditionalGeneration
+    else:
+        model_cls = AutoModelForCausalLM
 
     if args.single_gpu:
-        device_map = None
-        to_device = "cuda:0"
-        max_memory = None
+        device_map, to_device, max_mem = None, "cuda:0", None
     else:
-        device_map = "auto"
-        to_device = None
-        max_memory = {i: "40GB" for i in range(torch.cuda.device_count())}
+        device_map, to_device = "auto", None
+        max_mem = {i: "80GB" for i in range(torch.cuda.device_count())}
 
     model = model_cls.from_pretrained(
         args.path,
         trust_remote_code=True,
         device_map=device_map,
-        max_memory=max_memory,
+        max_memory=max_mem,
         torch_dtype=torch_dtype,
         quantization_config=quant_cfg,
     )
@@ -135,58 +111,35 @@ def main() -> None:
         model = model.to(to_device)
     model.eval()
 
-    if added:
+    if tokenizer.pad_token_id is None:
         model.resize_token_embeddings(len(tokenizer))
 
-    if (
-        model.dtype == torch.bfloat16
-        and torch.cuda.is_available()
-        and torch.cuda.get_device_capability(0)[0] >= 8
-    ):
-        torch.backends.cuda.matmul.allow_tf32 = True
-
-
-    ########## Debugging ##########
     print(f"Loaded model: {model.config._name_or_path}")
-    print("Own Config:")
+    print("Model cfg override:")
     print(json.dumps(cfg, indent=2, default=lambda o: repr(o)))
-    
-    print("Model config:")
-    print(f"Tokenizer: {tokenizer.__class__.__name__} (pad_token_id={tokenizer.pad_token_id})")
-    print(f"Model dtype: {model.dtype}")
-    
-
-    ################################
 
     first_device = to_device if args.single_gpu else next(iter(model.hf_device_map.values()))
 
-    # ---------- Daten ----------
+    # ---------- Data ----------
     ds = load_dataset("wikitext", "wikitext-2-raw-v1", split="test")
-    enc = tokenizer(
-        "\n\n".join(ds["text"]),
-        add_special_tokens=False,
-        return_tensors="pt"
-    ).input_ids[0]
-
+    enc = tokenizer("\n\n".join(ds["text"]), add_special_tokens=False, return_tensors="pt").input_ids[0]
     if tokenizer.bos_token_id is not None:
         enc = torch.cat([torch.tensor([tokenizer.bos_token_id]), enc])
 
+    max_len = cfg["max_len"]
     total_tokens = enc.size(0)
-    max_len = args.max_len or cfg["max_len"]
+    nsamples = total_tokens // max_len
+    if nsamples < 1:
+        raise ValueError("Not enough tokens for one block of length {}".format(max_len))
 
-    windows: List[Tuple[int, int]] = []
-    for i in range(0, total_tokens, args.stride):
-        end = min(i + args.stride, total_tokens)
-        begin = max(0, end - max_len)
-        windows.append((begin, end))
+    ids = enc[: nsamples * max_len].view(nsamples, max_len)
 
-    pad_id = tokenizer.pad_token_id
-
+    # ---------- Batch‑size autotune ----------
     if args.batch_size == "auto":
-        print("Auto-tuning batch_size …")
+        print("Auto‑tuning batch_size…")
         best_bs, bs = 1, 1
-        while bs <= 32:
-            if try_batch(model, enc, windows, bs, pad_id, max_len):
+        while bs <= 64:
+            if try_batch(model, ids, bs, first_device, pad_id):
                 best_bs = bs
                 bs *= 2
             else:
@@ -195,57 +148,29 @@ def main() -> None:
         batch_size = best_bs
     else:
         batch_size = int(args.batch_size)
-    print(f"Using batch_size = {batch_size}")
+    print(f"Fixed‑block eval: blocks={nsamples}, block_size={max_len}, batch_size={batch_size}")
 
-    nll = 0.0
-    tok_cnt = 0
-    idx = 0
-    while idx < len(windows):
-        batch = windows[idx: idx + batch_size]
-        input_seqs, target_seqs, token_counts = [], [], []
-        for begin, end in batch:
-            seq = enc[begin:end]
-            inp = seq.clone()
-            tgt = seq.clone()
-            new_tokens = end - begin
-            tgt[: -new_tokens] = -100
-            input_seqs.append(inp)
-            target_seqs.append(tgt)
-            token_counts.append(new_tokens)
-
-        inp_batch = pad_sequence(
-            input_seqs, batch_first=True, padding_value=pad_id
-        ).to(first_device)
-        tgt_batch = pad_sequence(
-            target_seqs, batch_first=True, padding_value=-100
-        ).to(first_device)
-
-        try:
-            with torch.no_grad():
-                outputs = model(
-                    inp_batch,
-                    labels=tgt_batch,
-                    use_cache=False,
-                )
-                batch_loss = outputs.loss.item()
-        except RuntimeError as e:
-            if "out of memory" in str(e).lower() and batch_size > 1:
-                torch.cuda.empty_cache()
-                batch_size = max(1, batch_size // 2)
-                print(f"OOM – reducing batch_size to {batch_size}")
-                continue
-            raise
-
-        nll += batch_loss * sum(token_counts)
-        tok_cnt += sum(token_counts)
-        idx += batch_size
+    # ---------- Perplexity ----------
+    nll, tok_cnt = 0.0, 0
+    for i in range(0, nsamples, batch_size):
+        j = min(i + batch_size, nsamples)
+        inp = ids[i:j].to(first_device)
+        tgt = inp.clone(); tgt[:, :-1] = -100  # mask first token
+        attn_mask: Optional[torch.Tensor] = None
+        if is_llama4:
+            attn_mask = torch.ones_like(inp).to(first_device)
+        with torch.no_grad():
+            loss = model(inp, attention_mask=attn_mask, labels=tgt, use_cache=False).loss.item()
+        tokens = (j - i) * (max_len - 1)
+        nll += loss * tokens
+        tok_cnt += tokens
 
     ppl = math.exp(nll / tok_cnt)
-    print(f"WikiText-2 perplexity: {ppl:.2f}")
-
+    print(f"WikiText‑2 perplexity: {ppl:.2f}")
     elapsed = time.time() - start_time
     print(f"⏱️  Runtime: {elapsed:.2f} s ({elapsed/60:.2f} min)")
 
 
 if __name__ == "__main__":
     main()
+
