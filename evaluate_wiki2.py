@@ -40,7 +40,7 @@ def try_batch(
     bs = min(batch_size, ids.size(0))
     probe = ids[:bs].to(first_device)
     tgt   = probe.clone()
-    tgt[:, :-1] = -100
+    tgt[:, 0] = -100
     attn_mask = torch.ones_like(probe).to(first_device)
     try:
         with torch.no_grad():
@@ -138,7 +138,7 @@ def main() -> None:
     if args.batch_size == "auto":
         print("Auto‑tuning batch_size…")
         best_bs, bs = 1, 1
-        while bs <= 64:
+        while bs <= 16:
             if try_batch(model, ids, bs, first_device, pad_id):
                 best_bs = bs
                 bs *= 2
@@ -155,7 +155,7 @@ def main() -> None:
     for i in range(0, nsamples, batch_size):
         j = min(i + batch_size, nsamples)
         inp = ids[i:j].to(first_device)
-        tgt = inp.clone(); tgt[:, :-1] = -100  # mask first token
+        tgt = inp.clone(); tgt[:, 0] = -100  # mask first token
         attn_mask: Optional[torch.Tensor] = None
         if is_llama4:
             attn_mask = torch.ones_like(inp).to(first_device)
