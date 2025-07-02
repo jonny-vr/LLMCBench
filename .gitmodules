@@ -3,7 +3,7 @@
 	url = https://github.com/mit-han-lab/llm-awq.git
 [submodule "lm-evaluation-harness"]
 	path = lm-evaluation-harness
-	url = https://github.com/eth-sri/lm-evaluation-harness.git
+	url = https://github.com/EleutherAI/lm-evaluation-harness
 [submodule "pruning/wanda"]
 	path = pruning/wanda
 	url = https://github.com/jonny-vr/wanda.git
