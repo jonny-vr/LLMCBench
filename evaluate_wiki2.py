@@ -19,7 +19,6 @@ from datasets import load_dataset
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
-    Gemma3ForConditionalGeneration,
     Llama4ForConditionalGeneration,
 )
 
@@ -29,33 +28,21 @@ from model_configs import get_model_cfg
 # helper: probe whether a given batch size fits                                #
 # --------------------------------------------------------------------------- #
 
-def try_batch(
-    model: torch.nn.Module,
-    ids: torch.Tensor,  # [nsamples, seq_len]
-    batch_size: int,
-    first_device: torch.device,
-    pad_id: int,
-) -> bool:
-    """Run a single forward with <batch_size> blocks to see if it OOMs."""
-    bs = min(batch_size, ids.size(0))
-    probe = ids[:bs].to(first_device)
-    tgt   = probe.clone()
-    tgt[:, 0] = -100
-    attn_mask = torch.ones_like(probe).to(first_device)
+def try_batch(model, ids, batch_size, first_device, llama4=False):
+    bs  = min(batch_size, ids.size(0))
+    inp = ids[:bs].to(first_device)
+    tgt = inp.clone(); tgt[:, 0] = -100
+    attn_mask = torch.ones_like(inp).to(first_device) if llama4 else None
     try:
         with torch.no_grad():
-            _ = model(
-                probe,
-                attention_mask=attn_mask,
-                labels=tgt,
-                use_cache=False,
-            )
+            _ = model(inp, attention_mask=attn_mask, labels=tgt, use_cache=False)
         return True
     except RuntimeError as e:
         if "out of memory" in str(e).lower():
             torch.cuda.empty_cache()
             return False
         raise
+
 
 # --------------------------------------------------------------------------- #
 # main                                                                         #
@@ -85,11 +72,8 @@ def main() -> None:
     torch_dtype = None if cfg.get("quantize") else cfg["torch_dtype"]
 
     is_llama4 = bool(re.match(r"^Llama-4-Scout", model_id))
-    is_gemma  = bool(re.match(r"^Gemma-3-", model_id, flags=re.IGNORECASE))
     if is_llama4:
         model_cls = Llama4ForConditionalGeneration
-    elif is_gemma:
-        model_cls = Gemma3ForConditionalGeneration
     else:
         model_cls = AutoModelForCausalLM
 
@@ -136,10 +120,10 @@ def main() -> None:
 
     # ---------- Batch‑size autotune ----------
     if args.batch_size == "auto":
-        print("Auto‑tuning batch_size…")
+        MAX_BS = 16
         best_bs, bs = 1, 1
-        while bs <= 16:
-            if try_batch(model, ids, bs, first_device, pad_id):
+        while bs <= MAX_BS:
+            if try_batch(model, ids, bs, first_device, llama4=is_llama4):
                 best_bs = bs
                 bs *= 2
             else:
@@ -150,25 +134,49 @@ def main() -> None:
         batch_size = int(args.batch_size)
     print(f"Fixed‑block eval: blocks={nsamples}, block_size={max_len}, batch_size={batch_size}")
 
-    # ---------- Perplexity ----------
     nll, tok_cnt = 0.0, 0
-    for i in range(0, nsamples, batch_size):
-        j = min(i + batch_size, nsamples)
+    bs_current = batch_size
+    i = 0
+    while i < nsamples:
+        j = min(i + bs_current, nsamples)
         inp = ids[i:j].to(first_device)
-        tgt = inp.clone(); tgt[:, 0] = -100  # mask first token
-        attn_mask: Optional[torch.Tensor] = None
-        if is_llama4:
-            attn_mask = torch.ones_like(inp).to(first_device)
-        with torch.no_grad():
-            loss = model(inp, attention_mask=attn_mask, labels=tgt, use_cache=False).loss.item()
-        tokens = (j - i) * (max_len - 1)
-        nll += loss * tokens
-        tok_cnt += tokens
+        tgt = inp.clone(); tgt[:, 0] = -100
+        attn_mask = torch.ones_like(inp).to(first_device) if is_llama4 else None
+
+        try:
+            with torch.no_grad():
+                loss = model(
+                    inp,
+                    attention_mask=attn_mask,
+                    labels=tgt,
+                    use_cache=False
+                ).loss.item()
+
+            tokens = tgt.ne(-100).sum().item()
+            nll    += loss * tokens
+            tok_cnt += tokens
+            i += bs_current                # nächster Block
+
+        except RuntimeError as e:
+            if "out of memory" in str(e).lower():
+                torch.cuda.empty_cache()    # Cache leeren
+                if bs_current == 1:         # geht gar nicht kleiner
+                    raise
+                bs_current //= 2            # Batch halbieren
+                print(f"⚠️  OOM – reduziere batch_size auf {bs_current} und retry …")
+            else:
+                raise
+
 
     ppl = math.exp(nll / tok_cnt)
     print(f"WikiText‑2 perplexity: {ppl:.2f}")
     elapsed = time.time() - start_time
     print(f"⏱️  Runtime: {elapsed:.2f} s ({elapsed/60:.2f} min)")
+    
+    # --- GPU-Memory freigeben ---
+    del model
+    torch.cuda.empty_cache()
+    import gc; gc.collect()
 
 
 if __name__ == "__main__":
