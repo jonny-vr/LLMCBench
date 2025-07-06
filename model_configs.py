@@ -95,9 +95,9 @@ MODEL_CONFIGS = {
 }
 
 FALLBACK = {
-    "torch_dtype": torch.float16,
+    "torch_dtype": torch.bfloat16,
     "quantize": False,
-    "max_len": 8192,
+    "max_len": 4096,
     "bnb_config": None,
 }
 
