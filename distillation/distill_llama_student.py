@@ -52,8 +52,10 @@ def build_student(teacher_cfg: LlamaConfig, layer_ratio: float = 0.5, keep_last:
       - PLUS the last `keep_last` layers of the teacher
     """
     total = teacher_cfg.num_hidden_layers
+    print(f"Teacher has {total} layers")
     bottom = max(1, int(total * layer_ratio))
     student_layers = bottom + keep_last
+    print(f"Building student with {student_layers} layers ")
     cfg_dict = teacher_cfg.to_dict()
     cfg_dict["num_hidden_layers"] = student_layers
     return LlamaForCausalLM(LlamaConfig.from_dict(cfg_dict))
