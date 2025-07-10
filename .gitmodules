@@ -7,3 +7,6 @@
 [submodule "pruning/wanda"]
 	path = pruning/wanda
 	url = https://github.com/jonny-vr/wanda.git
+[submodule "flash-attention"]
+	path = flash-attention
+	url = https://github.com/Dao-AILab/flash-attention.git
